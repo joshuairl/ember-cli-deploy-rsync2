@@ -210,7 +210,7 @@ module.exports = {
         var rev = context.revisionData;
         var revPath = config.releasesPath + '/' + rev.revisionKey;
         var revisions = context.initialRevisions.map(function(revision) {
-          return Object.assign({}, revision);
+          return Object.assign({}, revision, {active: false});
         });
 
         return fullname.then(function(name) {
