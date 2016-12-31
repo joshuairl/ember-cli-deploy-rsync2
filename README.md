@@ -1,27 +1,75 @@
 # ember-cli-deploy-rsync
-
-This README outlines the details of collaborating on this Ember addon.
+Easily deploy your Ember applications to a remote server using scp via rsync.
 
 ## Installation
+Install ember-cli-deploy first:
+```bash
+ember install ember-cli-deploy
+```
+Install ember-cli-deploy-build for automated building:
+```bash
+ember install ember-cli-deploy-build
+```
+Install ember-cli-deploy-revision-data to keep track of deployed revisions:
+```bash
+ember install ember-cli-deploy-revision-data
+```
+Then install ember-cli-deploy-rsync plugin (this plugin)
+```bash
+ember install ember-cli-deploy-rsync
+```
+## Usage
+Edit your `config/deploy.js` file:
+```javascript
+module.exports = function(environment){
+  var ENV = {
+  };
 
-* `git clone <repository-url>` this repository
-* `cd ember-cli-deploy-rsync`
-* `npm install`
-* `bower install`
+  if (environment === 'production') {
+    ENV['rsync'] = {
+      host: '<host>',
+      username: '<username>',
+      releasesPath: '<remote-path>'
+    }
+  };
+  return ENV;
+};
 
-## Running
+```
+and start deploying:
+```bash
+ember deploy production
+```
 
-* `ember serve`
-* Visit your app at [http://localhost:4200](http://localhost:4200).
+## Configuration Options
 
-## Running Tests
 
-* `npm test` (Runs `ember try:each` to test your addon against multiple Ember versions)
-* `ember test`
-* `ember test --server`
-
-## Building
-
-* `ember build`
-
-For more information on using ember-cli, visit [https://ember-cli.com/](https://ember-cli.com/).
+#### username 
+Username to connect via SSH.
+**required**
+#### host 
+Host (server address) to connect via SSH.
+**required**
+#### releasesPath
+Path where all revisions will be uploaded (each revision will be in a separate folder based on the revision name).
+**required**
+#### port 
+SSH port on target server, default: `22`.
+**optional**
+#### sourcePath 
+Path of the directory that will be uploaded, default: `tmp/deploy-dist`.
+**optional**
+#### exclude
+Exclude specified files and directories from uploading.
+**optional**
+#### flags
+Flags to pass to the [rsync](https://www.npmjs.com/package/rsync#flagsflags-set) command, default: `rtvu`.
+**optional**
+#### currentPath
+Name of the symbolic link that will be created, pointing to the current deployed version, default: `current`.
+It can be relative to the `releasesPath`, or absolute. The created link will be relative anyway.
+**optional**
+#### revisionsFile
+Name of the remote file which will hold the list of revisions, default: `revisions.json`.
+This file is relative to the `releasesPath`.
+**optional**

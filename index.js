@@ -64,7 +64,7 @@ module.exports = {
 
       configure: function() {
         this._super();
-        this.log('Checking that git working directory is clean...');
+        this._debug('Checking that git working directory is clean...');
         return new Promise(function(resolve, reject) {
           childProcess.exec('git diff-index --quiet HEAD --', function(err) {
             if (err) {
@@ -76,7 +76,7 @@ module.exports = {
       },
 
       didPrepare: function(context) {
-        this.log('Ensuring that revision data is present in the deploy context...');
+        this._debug('Ensuring that revision data is present in the deploy context...');
         if (!context.revisionData) {
           return Promise.reject(
             'You must include `ember-cli-deploy-revision-data` plugin for `' + options.name + '` to work.'
@@ -103,9 +103,15 @@ module.exports = {
           });
       },
 
+      _debug: function(message) {
+        return this.log(message, {
+          verbose: true
+        });
+      },
+
       _config: function() {
         if (!configCache) {
-          this.log('Building configuration cache...');
+          this._debug('Building configuration cache...');
           var releasesPath = removeTrailingSlash(this.readConfig('releasesPath'));
           var currentPath = this.readConfig('currentPath');
 
@@ -128,7 +134,7 @@ module.exports = {
       _grabRevisionsList: function() {
         var plugin = this;
         var config = this._config();
-        this.log('Grabbing revision list from the server...');
+        this._debug('Grabbing revision list from the server...');
         return new Promise(function(resolve, reject) {
           var path = tmp.tmpNameSync({
             postfix: '.json'
@@ -158,7 +164,7 @@ module.exports = {
           rsync.set('exclude', config.exclude);
         }
 
-        this.log('Running rsync command: ' + rsync.command());
+        this._debug('Running rsync command: ' + rsync.command());
 
         return new Promise(function(resolve, reject) {
           rsync.execute(function(error /*, code, cmd*/ ) {
@@ -171,7 +177,7 @@ module.exports = {
         var plugin = this;
         var config = this._config();
 
-        this.log('Uploading revisions file...');
+        this._debug('Uploading revisions file...');
 
         return new Promise(function(resolve, reject) {
           var path = tmp.tmpNameSync({
@@ -201,7 +207,7 @@ module.exports = {
         var revPath = config.releasesPath + '/' + revision;
         var link = sysPath.relative(sysPath.dirname(currentPath), revPath);
 
-        this.log('Activating revision `' + revision + '`...');
+        this._debug('Activating revision `' + revision + '`...');
 
         return new Promise(function(resolve, reject) {
           var file = tmp.tmpNameSync();
