@@ -4,21 +4,40 @@
 
 var BasePlugin = require('ember-cli-deploy-plugin');
 var Rsync = require('rsync');
-var scpClient = require('scp2');
+var username = require('username');
+var fullname = require('fullname');
 var tmp = require('tmp');
 var fs = require('fs');
 var sysPath = require('path');
+var childProcess = require('child_process');
 
 function removeTrailingSlash(path) {
   return path.replace(/[\/\\]?$/, '');
 }
 
+function unlinkCleanup(file, callback) {
+  var cleanup = function() {
+    silentlyFail(fs.unlinkSync.bind(fs, file));
+    if (callback) {
+      callback.apply(null, arguments);
+    }
+  };
+  if (!callback) {
+    cleanup();
+  } else {
+    return cleanup;
+  }
+}
 
 function silentlyFail(callback) {
   try {
-    return {return: callback()};
+    return {
+      return: callback()
+    };
   } catch (e) {
-    return {error: e};
+    return {
+      error: e
+    };
   }
 }
 
@@ -41,6 +60,18 @@ module.exports = {
       },
 
       requiredConfig: ['username', 'releasesPath', 'host'],
+
+
+      configure: function() {
+        return new Promise(function(resolve, reject) {
+          childProcess.exec('git diff-index --quiet HEAD --', function(err) {
+            if (err) {
+              return reject('Git working directory is not clean, commit any change before using `ember deploy`');
+            }
+            resolve();
+          });
+        });
+      },
 
       didPrepare: function(context) {
         if (!context.revisionData) {
@@ -92,23 +123,19 @@ module.exports = {
         var config = this._config();
 
         return new Promise(function(resolve, reject) {
-          tmp.file({
+          var path = tmp.tmpNameSync({
             postfix: '.json'
-          }, function(err, path, fd, cleanupCallback) {
-            scpClient.scp({
-              username: config.username,
-              host: config.host,
-              path: config.revisionsFile
-            }, path, function(err) {
-              if (err) {
-                silentlyFail(cleanupCallback);
-                return reject(err);
-              }
-              var revisions = require(path);
-              silentlyFail(cleanupCallback);
-              resolve(revisions);
-            });
           });
+          this._rsync(
+              config.userAtHost + ':' + config.revisionsFile,
+              path,
+              't'
+            )
+            .then(function() {
+              return require(path).data;
+            })
+            .then(unlinkCleanup(path, resolve))
+            .catch(unlinkCleanup(path, reject));
         });
       },
 
@@ -119,7 +146,7 @@ module.exports = {
           .shell('ssh -p ' + config.port)
           .flags(flags || config.flags)
           .source(source)
-          .destination(config.userAtHost + ':' + destination);
+          .destination(destination);
 
         if (config.exclude) {
           rsync.set('exclude', config.exclude);
@@ -139,31 +166,41 @@ module.exports = {
         var config = this._config();
 
         return new Promise(function(resolve, reject) {
-          tmp.file({
+          var path = tmp.tmpNameSync({
             postfix: '.json'
-          }, function(err, path, fd, cleanupCallback) {
-            if (err) {
-              return reject(err);
-            }
-            try{
-            fs.writeFileSync(fd, JSON.stringify({
+          });
+          try {
+            fs.writeFileSync(path, JSON.stringify({
               data: revisions
             }));
-          }catch(err){
-            silentlyFail(cleanupCallback);
-            reject(err);
+          } catch (err) {
+            return unlinkCleanup(path, reject)(err);
           }
-            this._rsync(
+          this._rsync(
               path,
-              config.releasesPath + '/' + config.revisionsFile,
+              config.userAtHost + ':' + config.releasesPath + '/' + config.revisionsFile,
               't'
-            ).then(function() {
-              silentlyFail(cleanupCallback);
-              resolve();
-            }).catch(function(err) {
-              silentlyFail(cleanupCallback);
-              reject(err);
-            });
+            )
+            .then(unlinkCleanup(path, resolve))
+            .catch(unlinkCleanup(path, reject));
+        });
+      },
+
+      _activateRevision: function(revision) {
+        var config = this._config();
+        var currentPath = sysPath.resolve(config.releasesPath, config.currentPath);
+        var revPath = config.releasesPath + '/' + revision;
+        var link = sysPath.relative(sysPath.dirname(currentPath), revPath);
+
+        return new Promise(function(resolve, reject) {
+          var file = tmp.tmpNameSync();
+          fs.symlink(link, file, 'dir', function(err) {
+            if (err) {
+              return unlinkCleanup(file, reject)(err);
+            }
+            this._rsync(file, config.userAtHost + ':' + currentPath, 't')
+              .then(unlinkCleanup(file, resolve))
+              .catch(unlinkCleanup(file, reject));
           });
         });
       },
@@ -172,31 +209,27 @@ module.exports = {
         var config = this._config();
         var rev = context.revisionData;
         var revPath = config.releasesPath + '/' + rev.revisionKey;
-        var currentPath = sysPath.resolve(config.releasesPath, config.currentPath);
-        var link = sysPath.relative(sysPath.dirname(currentPath), revPath);
-        var revisions = context.initialRevisions.map(function(revision){
-          return Object.assign({}, revision)
+        var revisions = context.initialRevisions.map(function(revision) {
+          return Object.assign({}, revision);
         });
 
-        revisions.push({
-          version: rev.scm.sha,
-          timestamp: rev.timestamp,
-          revision: rev.revisionKey,
-          active: true,
-          deployer: process.env.USER
+        return fullname.then(function(name) {
+          revisions.push({
+            version: rev.scm.sha,
+            timestamp: rev.timestamp,
+            revision: rev.revisionKey,
+            active: true,
+            deployer: username.sync() + (name ? ' (' + name + ')' : ''),
+          });
+          return Promise.all([
+            this._rsync(
+              config.sourcePath + '/',
+              config.userAtHost + ':' + revPath + '/'
+            ),
+            this._activateRevision(rev.revisionKey),
+            this._uploadRevisionsFile(revisions),
+          ]);
         });
-
-        return Promise.all([
-          this._rsync(
-            config.sourcePath + '/',
-            revPath + '/'
-          ),
-          this._uploadRevisionsFile(revisions),
-        ]);
-      },
-
-      didUpload: function(context) {
-
       },
     });
 
