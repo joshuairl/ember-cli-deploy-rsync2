@@ -1,11 +1,11 @@
-# ember-cli-deploy-scp2
+# ember-cli-deploy-rsync
 
 This README outlines the details of collaborating on this Ember addon.
 
 ## Installation
 
 * `git clone <repository-url>` this repository
-* `cd ember-cli-deploy-scp2`
+* `cd ember-cli-deploy-rsync`
 * `npm install`
 * `bower install`
 

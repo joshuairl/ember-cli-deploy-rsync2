@@ -63,6 +63,8 @@ module.exports = {
 
 
       configure: function() {
+        this._super();
+        this.log('Checking that git working directory is clean...');
         return new Promise(function(resolve, reject) {
           childProcess.exec('git diff-index --quiet HEAD --', function(err) {
             if (err) {
@@ -74,6 +76,7 @@ module.exports = {
       },
 
       didPrepare: function(context) {
+        this.log('Ensuring that revision data is present in the deploy context...');
         if (!context.revisionData) {
           return Promise.reject(
             'You must include `ember-cli-deploy-revision-data` plugin for `' + options.name + '` to work.'
@@ -83,23 +86,26 @@ module.exports = {
 
 
       fetchInitialRevisions: function() {
-        return this._grabRevisionsList().then(function(revisions) {
-          return {
-            initialRevisions: revisions
-          };
-        });
+        return this._grabRevisionsList()
+          .then(function(revisions) {
+            return {
+              initialRevisions: revisions
+            };
+          });
       },
 
       fetchRevisions: function() {
-        return this._grabRevisionsList().then(function(revisions) {
-          return {
-            revisions: revisions
-          };
-        });
+        return this._grabRevisionsList()
+          .then(function(revisions) {
+            return {
+              revisions: revisions
+            };
+          });
       },
 
       _config: function() {
         if (!configCache) {
+          this.log('Building configuration cache...');
           var releasesPath = removeTrailingSlash(this.readConfig('releasesPath'));
           var currentPath = this.readConfig('currentPath');
 
@@ -120,13 +126,14 @@ module.exports = {
       },
 
       _grabRevisionsList: function() {
+        var plugin = this;
         var config = this._config();
-
+        this.log('Grabbing revision list from the server...');
         return new Promise(function(resolve, reject) {
           var path = tmp.tmpNameSync({
             postfix: '.json'
           });
-          this._rsync(
+          plugin._rsync(
               config.userAtHost + ':' + config.revisionsFile,
               path,
               't'
@@ -141,7 +148,6 @@ module.exports = {
 
       _rsync: function(source, destination, flags) {
         var config = this._config();
-
         var rsync = new Rsync()
           .shell('ssh -p ' + config.port)
           .flags(flags || config.flags)
@@ -152,18 +158,20 @@ module.exports = {
           rsync.set('exclude', config.exclude);
         }
 
+        this.log('Running rsync command: ' + rsync.command());
+
         return new Promise(function(resolve, reject) {
-          rsync.execute(function(error, code, cmd) {
-            return error ? reject(error) : resolve({
-              code: code,
-              command: cmd
-            });
+          rsync.execute(function(error /*, code, cmd*/ ) {
+            return error ? reject(error) : resolve();
           });
         });
       },
 
       _uploadRevisionsFile: function(revisions) {
+        var plugin = this;
         var config = this._config();
+
+        this.log('Uploading revisions file...');
 
         return new Promise(function(resolve, reject) {
           var path = tmp.tmpNameSync({
@@ -176,9 +184,9 @@ module.exports = {
           } catch (err) {
             return unlinkCleanup(path, reject)(err);
           }
-          this._rsync(
+          plugin._rsync(
               path,
-              config.userAtHost + ':' + config.releasesPath + '/' + config.revisionsFile,
+              config.userAtHost + ':' + config.revisionsFile,
               't'
             )
             .then(unlinkCleanup(path, resolve))
@@ -187,10 +195,13 @@ module.exports = {
       },
 
       _activateRevision: function(revision) {
+        var plugin = this;
         var config = this._config();
         var currentPath = sysPath.resolve(config.releasesPath, config.currentPath);
         var revPath = config.releasesPath + '/' + revision;
         var link = sysPath.relative(sysPath.dirname(currentPath), revPath);
+
+        this.log('Activating revision `' + revision + '`...');
 
         return new Promise(function(resolve, reject) {
           var file = tmp.tmpNameSync();
@@ -198,7 +209,7 @@ module.exports = {
             if (err) {
               return unlinkCleanup(file, reject)(err);
             }
-            this._rsync(file, config.userAtHost + ':' + currentPath, 't')
+            plugin._rsync(file, config.userAtHost + ':' + currentPath, 'lt')
               .then(unlinkCleanup(file, resolve))
               .catch(unlinkCleanup(file, reject));
           });
@@ -206,28 +217,36 @@ module.exports = {
       },
 
       upload: function(context) {
+        var plugin = this;
         var config = this._config();
         var rev = context.revisionData;
+        var revision;
         var revPath = config.releasesPath + '/' + rev.revisionKey;
-        var revisions = context.initialRevisions.map(function(revision) {
-          return Object.assign({}, revision, {active: false});
+        var revisions = context.initialRevisions.filter(function(r) {
+          return r.revision !== rev.revisionKey;
+        }).map(function(r) {
+          return Object.assign({}, r, {
+            active: false
+          });
         });
 
-        return fullname.then(function(name) {
-          revisions.push({
+
+        return fullname().then(function(name) {
+          revisions.push(revision = {
             version: rev.scm.sha,
             timestamp: rev.timestamp,
             revision: rev.revisionKey,
             active: true,
-            deployer: username.sync() + (name ? ' (' + name + ')' : ''),
+            deployer: username.sync() + (name ? ' - ' + name : ''),
           });
+          plugin.log('Uploading revision `' + rev.revisionKey + '` (deployer: ' + revision.deployer + ')...');
           return Promise.all([
-            this._rsync(
+            plugin._rsync(
               config.sourcePath + '/',
               config.userAtHost + ':' + revPath + '/'
             ),
-            this._activateRevision(rev.revisionKey),
-            this._uploadRevisionsFile(revisions),
+            plugin._activateRevision(rev.revisionKey),
+            plugin._uploadRevisionsFile(revisions),
           ]);
         });
       },
