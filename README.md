@@ -1,4 +1,4 @@
-# ember-cli-deploy-rsync
+# ember-cli-deploy-rsync2
 Easily deploy your Ember applications to a remote server using scp via rsync.
 
 ## Installation
@@ -14,9 +14,9 @@ Install ember-cli-deploy-revision-data to keep track of deployed revisions:
 ```bash
 ember install ember-cli-deploy-revision-data
 ```
-Then install ember-cli-deploy-rsync plugin (this plugin)
+Then install ember-cli-deploy-rsync2 plugin (this plugin)
 ```bash
-ember install ember-cli-deploy-rsync
+ember install ember-cli-deploy-rsync2
 ```
 ## Usage
 Edit your `config/deploy.js` file:
