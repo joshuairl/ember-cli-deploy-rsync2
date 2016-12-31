@@ -26,7 +26,7 @@ module.exports = function(environment){
   };
 
   if (environment === 'production') {
-    ENV['rsync'] = {
+    ENV.rsync2 = {
       host: '<host>',
       username: '<username>',
       releasesPath: '<remote-path>'
