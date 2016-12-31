@@ -1,6 +1,6 @@
 {
-  "name": "ember-cli-deploy-rsync",
-  "version": "0.0.1",
+  "name": "ember-cli-deploy-rsync2",
+  "version": "0.0.2",
   "description": "Deploy Ember app using rsync, with support for revision list, activate, etc...",
   "keywords": [
     "ember-addon",
@@ -12,7 +12,7 @@
     "doc": "doc",
     "test": "tests"
   },
-  "repository": "https://github.com/huafu/ember-cli-deploy-rsync.git",
+  "repository": "https://github.com/huafu/ember-cli-deploy-rsync2.git",
   "scripts": {
     "build": "ember build",
     "start": "ember server",

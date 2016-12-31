@@ -42,7 +42,7 @@ function silentlyFail(callback) {
 }
 
 module.exports = {
-  name: 'ember-cli-deploy-rsync',
+  name: 'ember-cli-deploy-rsync2',
 
   createDeployPlugin: function(options) {
     var configCache;
