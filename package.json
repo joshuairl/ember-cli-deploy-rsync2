@@ -1,6 +1,6 @@
 {
   "name": "ember-cli-deploy-rsync",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "description": "Deploy Ember app using rsync, with support for revision list, activate, etc...",
   "keywords": [
     "ember-addon",

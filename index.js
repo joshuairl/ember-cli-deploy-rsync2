@@ -54,9 +54,9 @@ module.exports = {
         port: '22',
         sourcePath: 'tmp/deploy-dist',
         currentPath: 'current',
+        revisionsFile: 'revisions.json',
         exclude: false,
         flags: 'rtvu',
-        revisionsFile: 'revisions.json',
       },
 
       requiredConfig: ['username', 'releasesPath', 'host'],
@@ -148,7 +148,12 @@ module.exports = {
               return require(path).data;
             })
             .then(unlinkCleanup(path, resolve))
-            .catch(unlinkCleanup(path, reject));
+            .catch(function(err) {
+              if (err.message === 'rsync exited with code 23') {
+                return unlinkCleanup(path, resolve)([]);
+              }
+              unlinkCleanup(path, reject)(err);
+            });
         });
       },
 
@@ -236,6 +241,7 @@ module.exports = {
           });
         });
 
+        this._debug('Uploading revision `' + rev.revisionKey + '` (deployer: ' + revision.deployer + ')...');
 
         return fullname().then(function(name) {
           revisions.push(revision = {
@@ -245,7 +251,6 @@ module.exports = {
             active: true,
             deployer: username.sync() + (name ? ' - ' + name : ''),
           });
-          plugin.log('Uploading revision `' + rev.revisionKey + '` (deployer: ' + revision.deployer + ')...');
           return Promise.all([
             plugin._rsync(
               config.sourcePath + '/',
