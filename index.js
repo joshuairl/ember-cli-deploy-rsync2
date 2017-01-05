@@ -241,8 +241,6 @@ module.exports = {
           });
         });
 
-        this._debug('Uploading revision `' + rev.revisionKey + '` (deployer: ' + revision.deployer + ')...');
-
         return fullname().then(function(name) {
           revisions.push(revision = {
             version: rev.scm.sha,
@@ -251,6 +249,9 @@ module.exports = {
             active: true,
             deployer: username.sync() + (name ? ' - ' + name : ''),
           });
+
+          this._debug('Uploading revision `' + rev.revisionKey + '` (deployer: ' + revision.deployer + ')...');
+
           return Promise.all([
             plugin._rsync(
               config.sourcePath + '/',
