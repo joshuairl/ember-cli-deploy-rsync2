@@ -55,8 +55,9 @@ module.exports = {
         sourcePath: 'tmp/deploy-dist',
         currentPath: 'current',
         revisionsFile: 'revisions.json',
-        exclude: false,
-        flags: 'rtvu',
+        exclude: null,
+        include: null,
+        flags: 'rtu',
       },
 
       requiredConfig: ['username', 'releasesPath', 'host'],
@@ -64,7 +65,7 @@ module.exports = {
 
       configure: function() {
         this._super();
-        this._debug('Checking that git working directory is clean...');
+        this._addDebug('Checking that git working directory is clean...');
         return new Promise(function(resolve, reject) {
           childProcess.exec('git diff-index --quiet HEAD --', function(err) {
             if (err) {
@@ -76,7 +77,7 @@ module.exports = {
       },
 
       didPrepare: function(context) {
-        this._debug('Ensuring that revision data is present in the deploy context...');
+        this._addDebug('Ensuring that revision data is present in the deploy context...');
         if (!context.revisionData) {
           return Promise.reject(
             'You must include `ember-cli-deploy-revision-data` plugin for `' + options.name + '` to work.'
@@ -103,20 +104,25 @@ module.exports = {
           });
       },
 
-      _debug: function(message) {
+      _addDebug: function(message) {
         return this.log(message, {
           verbose: true
         });
       },
 
+      _addInfo: function(message) {
+        return this.log(message);
+      },
+
       _config: function() {
         if (!configCache) {
-          this._debug('Building configuration cache...');
+          this._addDebug('Building configuration cache...');
           var releasesPath = removeTrailingSlash(this.readConfig('releasesPath'));
           var currentPath = this.readConfig('currentPath');
 
           configCache = {
             currentPath: sysPath.isAbsolute(currentPath) ? sysPath.relative(releasesPath, currentPath) : currentPath,
+            currentBase: sysPath.basename(currentPath),
             releasesPath: releasesPath,
             sourcePath: removeTrailingSlash(this.readConfig('sourcePath')),
             revisionsFile: releasesPath + '/' + this.readConfig('revisionsFile'),
@@ -134,7 +140,7 @@ module.exports = {
       _grabRevisionsList: function() {
         var plugin = this;
         var config = this._config();
-        this._debug('Grabbing revision list from the server...');
+        this._addDebug('Grabbing revision list from the server...');
         return new Promise(function(resolve, reject) {
           var path = tmp.tmpNameSync({
             postfix: '.json'
@@ -149,27 +155,46 @@ module.exports = {
             })
             .then(unlinkCleanup(path, resolve))
             .catch(function(err) {
+              // invalid path, we are sure it's a missing file and so can create one
+              unlinkCleanup(path);
               if (err.message === 'rsync exited with code 23') {
-                return unlinkCleanup(path, resolve)([]);
+                resolve([]);
+              } else {
+                reject(err);
               }
-              unlinkCleanup(path, reject)(err);
             });
         });
       },
 
-      _rsync: function(source, destination, flags) {
+      _rsync: function(source, destination, options) {
         var config = this._config();
         var rsync = new Rsync()
           .shell('ssh -p ' + config.port)
-          .flags(flags || config.flags)
           .source(source)
           .destination(destination);
 
-        if (config.exclude) {
-          rsync.set('exclude', config.exclude);
+        if (typeof options === 'string') {
+          options = {
+            flags: options
+          };
+        } else if (options == null) {
+          options = {
+            flags: config.flags,
+            exclude: config.exclude,
+            include: config.include,
+          };
         }
 
-        this._debug('Running rsync command: ' + rsync.command());
+        // apply options
+        rsync.flags(options.flags);
+        if (config.exclude || config.include) {
+          rsync.set('exclude', config.exclude || '*');
+          if (config.include) {
+            rsync.set('include', config.include);
+          }
+        }
+
+        this._addDebug('Running rsync command: ' + rsync.command());
 
         return new Promise(function(resolve, reject) {
           rsync.execute(function(error /*, code, cmd*/ ) {
@@ -182,7 +207,7 @@ module.exports = {
         var plugin = this;
         var config = this._config();
 
-        this._debug('Uploading revisions file...');
+        this._addDebug('Uploading revisions file...');
 
         return new Promise(function(resolve, reject) {
           var path = tmp.tmpNameSync({
@@ -212,7 +237,7 @@ module.exports = {
         var revPath = config.releasesPath + '/' + revision;
         var link = sysPath.relative(sysPath.dirname(currentPath), revPath);
 
-        this._debug('Activating revision `' + revision + '`...');
+        this._addLog('Activating revision `' + revision + '`...');
 
         return new Promise(function(resolve, reject) {
           var file = tmp.tmpNameSync();
@@ -220,7 +245,7 @@ module.exports = {
             if (err) {
               return unlinkCleanup(file, reject)(err);
             }
-            plugin._rsync(file, config.userAtHost + ':' + currentPath, 'lt')
+            plugin._rsync(file, config.userAtHost + ':' + currentPath, 'ltI')
               .then(unlinkCleanup(file, resolve))
               .catch(unlinkCleanup(file, reject));
           });
@@ -250,7 +275,7 @@ module.exports = {
             deployer: username.sync() + (name ? ' - ' + name : ''),
           });
 
-          plugin._debug('Uploading revision `' + rev.revisionKey + '` (deployer: ' + revision.deployer + ')...');
+          plugin._addDebug('Uploading revision `' + rev.revisionKey + '` (deployer: ' + revision.deployer + ')...');
 
           return Promise.all([
             plugin._rsync(

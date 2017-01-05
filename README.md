@@ -62,8 +62,11 @@ Path of the directory that will be uploaded, default: `tmp/deploy-dist`.
 #### exclude
 Exclude specified files and directories from uploading.
 **optional**
+#### include
+Include specified files and directories back from exclude (if `exclude` is not defined, it'll be set to `*`).
+**optional**
 #### flags
-Flags to pass to the [rsync](https://www.npmjs.com/package/rsync#flagsflags-set) command, default: `rtvu`.
+Flags to pass to the [rsync](https://www.npmjs.com/package/rsync#flagsflags-set) command, default: `rtu`.
 **optional**
 #### currentPath
 Name of the symbolic link that will be created, pointing to the current deployed version, default: `current`.
