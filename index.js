@@ -237,7 +237,7 @@ module.exports = {
         var revPath = config.releasesPath + '/' + revision;
         var link = sysPath.relative(sysPath.dirname(currentPath), revPath);
 
-        this._addLog('Activating revision `' + revision + '`...');
+        this._addInfo('Activating revision `' + revision + '`...');
 
         return new Promise(function(resolve, reject) {
           var file = tmp.tmpNameSync();
@@ -275,7 +275,7 @@ module.exports = {
             deployer: username.sync() + (name ? ' - ' + name : ''),
           });
 
-          plugin._addDebug('Uploading revision `' + rev.revisionKey + '` (deployer: ' + revision.deployer + ')...');
+          plugin._addInfo('Uploading revision `' + rev.revisionKey + '` (deployer: ' + revision.deployer + ')...');
 
           return Promise.all([
             plugin._rsync(
