@@ -250,7 +250,7 @@ module.exports = {
             deployer: username.sync() + (name ? ' - ' + name : ''),
           });
 
-          this._debug('Uploading revision `' + rev.revisionKey + '` (deployer: ' + revision.deployer + ')...');
+          plugin._debug('Uploading revision `' + rev.revisionKey + '` (deployer: ' + revision.deployer + ')...');
 
           return Promise.all([
             plugin._rsync(
