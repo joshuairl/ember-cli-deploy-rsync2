@@ -46,9 +46,9 @@ ember deploy production
 
 Option name | Description | Default | Examples
 ---: | --- | :---: | ---
-`username` | SSH user name | *required* | `huafu`
-`host` | SSH host | *required* | `example.com`
-`releasesPath` | Path where all revisions will be uploaded (each revision will be in a separate folder based on the revision name) | *required* | `/var/www/example.com/revisions`
+`username` | SSH user name | **required** | `huafu`
+`host` | SSH host | **required** | `example.com`
+`releasesPath` | Path where all revisions will be uploaded (each revision will be in a separate folder based on the revision name) | **required** | `/var/www/example.com/revisions`
 `port` | SSH port | `22` | `2222`
 `sourcePath` | Path of the directory that will be uploaded | `tmp/deploy-dist` | `some/local/path`
 `exclude` | Exclude specified files and directories from uploading | `null`, | `['.htaccess', 'private']`
