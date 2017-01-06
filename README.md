@@ -43,7 +43,6 @@ ember deploy production
 
 ## Configuration Options
 
-
 Option name | Description | Default | Examples
 ---: | --- | :---: | ---
 `username` | SSH user name | **required** | `huafu`
