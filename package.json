@@ -16,6 +16,7 @@
   },
   "repository": "https://github.com/huafu/ember-cli-deploy-rsync2.git",
   "dependencies": {
+    "ember-cli-deploy-plugin": "^0.2.9",
     "fullname": "^3.2.0",
     "rsync": "^0.6.0",
     "tmp": "0.0.31",
