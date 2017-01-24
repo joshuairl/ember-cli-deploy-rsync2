@@ -276,6 +276,7 @@ module.exports = {
         return fullname().then(function (name) {
           map.userFullName = name;
           map.userName = username.sync();
+          map.user = name || map.userName;
           return format.replace(/\{([a-z0-9]+)}/gi, function (dummy, key) {
             if (hasOwn.call(map, key)) {
               return map[key];
