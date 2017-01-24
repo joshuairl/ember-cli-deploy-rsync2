@@ -55,3 +55,4 @@ Option name | Description | Default | Examples
 `flags` | Flags to pass to the [rsync](https://www.npmjs.com/package/rsync#flagsflags-set) command | `rtu` | `ar`
 `currentPath` | Name of the symbolic link that will be created, pointing to the current deployed version. It can be relative to the `releasesPath`, or absolute. The created link will be relative anyway | `current` | `../current`
 `revisionFile` | Name of the remote file which will hold the list of revisions. This file is relative to the `releasesPath` | `revisions.json` | `../rev-manifest.json`
+`deployerFormat` | Format string for the deployer (`{userFullName}`, `{userName}` and `{user}` are possible variables, `{user}` will be replaced with the user full name if found, else user name | `{user}` | `Huafu`
