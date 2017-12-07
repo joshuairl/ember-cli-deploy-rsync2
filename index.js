@@ -10,15 +10,16 @@ const tmp = require('tmp');
 const fs = require('fs');
 const sysPath = require('path');
 const childProcess = require('child_process');
-
+const KeepReleases = require('./lib/keep-releases');
 const hasOwn = Object.prototype.hasOwnProperty;
+const path = require("path");
 
 function removeTrailingSlash(path) {
   return path.replace(/[\/\\]?$/, '');
 }
 
 function unlinkCleanup(file, callback) {
-  const cleanup = function () {
+  const cleanup = function() {
     silentlyFail(fs.unlinkSync.bind(fs, file));
     if (callback) {
       callback.apply(null, arguments);
@@ -61,6 +62,9 @@ module.exports = {
         include: null,
         flags: 'rtu',
         deployerFormat: '{user}',
+        keepReleases: null,
+        privateKey: null,
+        skipGitCheck: false,
       },
 
       requiredConfig: ['username', 'releasesPath', 'host'],
@@ -68,15 +72,45 @@ module.exports = {
 
       configure() {
         this._super();
-        this._addDebug('Checking that git working directory is clean...');
-        return new Promise(function (resolve, reject) {
-          childProcess.exec('git diff-index --quiet HEAD --', function (err) {
-            if (err) {
-              return reject('Git working directory is not clean, commit any change before using `ember deploy`');
-            }
-            resolve();
+
+        if (this.readConfig('keepReleases')) {
+          let privateKeyPath = this.readConfig('privateKey');
+          let sshConfig = {
+            host: this.readConfig('host'),
+            username: this.readConfig('username'),
+            port: this.readConfig('port')
+          };
+
+          if (privateKeyPath) {
+            sshConfig.privateKey = fs.readFileSync(privateKeyPath);
+          }
+
+          this._addDebug(JSON.stringify(sshConfig));
+          this._keepReleasesSsh = new KeepReleases({
+            config: sshConfig,
+            log: {
+              info: (message) => {
+                this._addDebug(message);
+              },
+              error: (message) => {
+                this._addDebug(message);
+              },
+            },
           });
-        });
+        }
+        if (!this.readConfig('skipGitCheck')) {
+          this._addDebug('Checking that git working directory is clean...');
+          return new Promise(function(resolve, reject) {
+            childProcess.exec('git diff-index --quiet HEAD --', function(err) {
+              if (err) {
+                return reject('Git working directory is not clean, commit any change before using `ember deploy`');
+              }
+              resolve();
+            });
+          });
+        } else {
+          this._addDebug('Skipping git working directory is clean check...');
+        }
       },
 
       didPrepare(context) {
@@ -91,7 +125,7 @@ module.exports = {
 
       fetchInitialRevisions() {
         return this._grabRevisionsList()
-          .then(function (revisions) {
+          .then(function(revisions) {
             return {
               initialRevisions: revisions
             };
@@ -100,7 +134,7 @@ module.exports = {
 
       fetchRevisions() {
         return this._grabRevisionsList()
-          .then(function (revisions) {
+          .then(function(revisions) {
             return {
               revisions: revisions
             };
@@ -137,6 +171,9 @@ module.exports = {
             exclude: this.readConfig('exclude'),
             include: this.readConfig('include'),
             deployerFormat: this.readConfig('deployerFormat') || 'unknown',
+            keepReleases: this.readConfig('keepReleases') || null,
+            skipGitCheck: this.readConfig('skipGitCheck') || false,
+            privateKey: this.readConfig('privateKey') || null,
           };
         }
         return configCache;
@@ -146,20 +183,20 @@ module.exports = {
         const plugin = this;
         const config = this._config();
         this._addDebug('Grabbing revision list from the server...');
-        return new Promise(function (resolve, reject) {
+        return new Promise(function(resolve, reject) {
           const path = tmp.tmpNameSync({
             postfix: '.json'
           });
           plugin._rsync(
               config.userAtHost + ':' + config.revisionsFile,
-            path,
-            't'
+              path,
+              't'
             )
-            .then(function () {
+            .then(function() {
               return require(path).data;
             })
             .then(unlinkCleanup(path, resolve))
-            .catch(function (err) {
+            .catch(function(err) {
               // invalid path, we are sure it's a missing file and so can create one
               unlinkCleanup(path);
               if (err.message === 'rsync exited with code 23') {
@@ -201,8 +238,8 @@ module.exports = {
 
         this._addDebug('Running rsync command: ' + rsync.command());
 
-        return new Promise(function (resolve, reject) {
-          rsync.execute(function (error /*, code, cmd*/) {
+        return new Promise(function(resolve, reject) {
+          rsync.execute(function(error /*, code, cmd*/ ) {
             return error ? reject(error) : resolve();
           });
         });
@@ -214,7 +251,7 @@ module.exports = {
 
         this._addDebug('Uploading revisions file...');
 
-        return new Promise(function (resolve, reject) {
+        return new Promise(function(resolve, reject) {
           const path = tmp.tmpNameSync({
             postfix: '.json'
           });
@@ -226,9 +263,9 @@ module.exports = {
             return unlinkCleanup(path, reject)(err);
           }
           plugin._rsync(
-            path,
+              path,
               config.userAtHost + ':' + config.revisionsFile,
-            't'
+              't'
             )
             .then(unlinkCleanup(path, resolve))
             .catch(unlinkCleanup(path, reject));
@@ -244,40 +281,63 @@ module.exports = {
 
         this._addInfo('Activating revision `' + revision + '`...');
 
-        return new Promise(function (resolve, reject) {
+        return new Promise(function(resolve, reject) {
           tmp.dir({
             unsafeCleanup: true
-          }, function (err, path, cleanupCallback) {
+          }, function(err, path, cleanupCallback) {
             if (err) {
               return reject(err);
             }
-            fs.symlink(link, sysPath.join(path, config.currentBase), 'dir', function (err) {
+            fs.symlink(link, sysPath.join(path, config.currentBase), 'dir', function(err) {
               if (err) {
                 silentlyFail(cleanupCallback);
                 return reject(err);
               }
               plugin._rsync(path + '/*', config.userAtHost + ':' + sysPath.dirname(currentPath) + '/', 'rltI')
-                .then(function () {
+                .then(function() {
                   silentlyFail(cleanupCallback);
                   resolve();
                 })
-                .catch(function (err) {
+                .catch(function(err) {
                   silentlyFail(cleanupCallback);
                   reject(err);
                 });
             });
-
           });
         });
       },
+      _keepReleases(revisions) {
+        const ssh = this._keepReleasesSsh;
+        const releasesDir = this.readConfig('releasesPath');
+        const keepReleasesCount = this.readConfig('keepReleases');
+        let releasesToDelete;
+        this._addInfo('Cleaning up past releases...');
+        this._addDebug(JSON.stringify(revisions));
 
+        // SORT REVISIONS BY DATE IF NOT ALREADY DONE SO...?
+        revisions = revisions.sort((a, b) => {
+          const dateA = new Date(a.timestamp);
+          const dateB = new Date(b.timestamp);
+          return dateB - dateA;
+        });
+        return Promise.all(revisions.splice(keepReleasesCount).map((release) => {
+          let command = `rm -rf ${path.join(releasesDir,release.revision)}`
+          // if (remoteDir) {
+          //   command = 'cd ' + releasesDir + ' && ' + command;
+          // }
+          this._addDebug(`Deleting past release '${command}'...`);
+          return ssh.execute(command);
+        })).then(() => {
+          return this._uploadRevisionsFile(revisions.slice(0, keepReleasesCount))
+        });
+      },
       _formatDeployer(format, revisionData) {
         const map = Object.assign({}, revisionData || {});
-        return fullname().then(function (name) {
+        return fullname().then(function(name) {
           map.userFullName = name;
           map.userName = username.sync();
           map.user = name || map.userName;
-          return format.replace(/\{([a-z0-9]+)}/gi, function (dummy, key) {
+          return format.replace(/\{([a-z0-9]+)}/gi, function(dummy, key) {
             if (hasOwn.call(map, key)) {
               return map[key];
             }
@@ -291,9 +351,9 @@ module.exports = {
         const config = this._config();
         const rev = context.revisionData;
         const revPath = config.releasesPath + '/' + rev.revisionKey;
-        const revisions = context.initialRevisions.filter(function (r) {
+        const revisions = context.initialRevisions.filter(function(r) {
           return r.revision !== rev.revisionKey;
-        }).map(function (r) {
+        }).map(function(r) {
           return Object.assign({}, r, {
             active: false
           });
@@ -301,7 +361,7 @@ module.exports = {
         let revision;
 
         return this._formatDeployer(config.deployerFormat, rev)
-          .then(function (deployer) {
+          .then(function(deployer) {
             revisions.push(revision = {
               version: rev.scm.sha,
               timestamp: rev.timestamp,
@@ -319,7 +379,11 @@ module.exports = {
               ),
               plugin._activateRevision(rev.revisionKey),
               plugin._uploadRevisionsFile(revisions),
-            ]);
+            ]).then(() => {
+              if (config.keepReleases) {
+                return plugin._keepReleases(revisions);
+              }
+            });
           });
       },
     });
